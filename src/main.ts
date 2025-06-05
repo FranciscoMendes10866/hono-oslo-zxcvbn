@@ -55,11 +55,14 @@ const app = new Hono()
       expires: new Date(), // TODO: replace this
     });
 
-    return c.json({
-      success: true,
-      error: null,
-      content: null,
-    } satisfies JSONResponseBase);
+    return c.json(
+      {
+        success: true,
+        error: null,
+        content: null,
+      } satisfies JSONResponseBase,
+      201,
+    );
   })
   .post(
     "/users/:userId/email-verification-request",
