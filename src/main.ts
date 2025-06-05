@@ -105,9 +105,7 @@ const app = new Hono()
 
       // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
 
-      // TODO: check if user exists
-
-      // TODO: get user email verification request row datum
+      // TODO: check if user exists and include existing email verification request datum (1-1 rel)
 
       // TODO: check expiration, on fail invalidate row datum
 
