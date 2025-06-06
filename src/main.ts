@@ -21,6 +21,8 @@ import { generateCookieDefaults, generateRandomToken } from "./utils/session";
 
 const COOKIE_OPTIONS = Object.freeze(generateCookieDefaults());
 
+// TODO: add bot protection to the (send) password reset email route [isbot npm package]
+
 const app = new Hono()
   .basePath("/api")
   .use(
@@ -115,6 +117,8 @@ const app = new Hono()
 
       const isValidCode = verifyHash("CHANGE_ME", queryParams.code);
       if (!isValidCode) throw new HTTPException(400);
+
+      // TODO: set the user email as verified
 
       // TODO: invalidate row datum
 
