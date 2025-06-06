@@ -23,6 +23,12 @@ export const requestEmailVerificationQuerySchema = validatorFactory(
   }),
 );
 
+export const requestEmailUpdateBodySchema = validatorFactory(
+  T.Object({
+    newEmail: T.String({ format: "email" }),
+  }),
+);
+
 export const signInBodySchema = validatorFactory(
   T.Object({
     email: T.String({ format: "email" }),

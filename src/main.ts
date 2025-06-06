@@ -9,6 +9,7 @@ import {
   signUpBodySchema,
   requestEmailVerificationParamsSchema,
   requestEmailVerificationQuerySchema,
+  requestEmailUpdateBodySchema,
 } from "./schemas";
 import {
   isPasswordGuessable,
@@ -68,7 +69,7 @@ const app = new Hono()
     "/users/:userId/email-verification-request",
     validator("param", requestEmailVerificationParamsSchema.parse),
     (c) => {
-      const { userId } = c.req.valid("param");
+      const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
 
       // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
 
@@ -103,7 +104,7 @@ const app = new Hono()
     validator("param", requestEmailVerificationParamsSchema.parse),
     validator("query", requestEmailVerificationQuerySchema.parse),
     (c) => {
-      const { userId } = c.req.valid("param");
+      const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
       const queryParams = c.req.valid("query");
 
       // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
@@ -116,6 +117,80 @@ const app = new Hono()
       if (!isValidCode) throw new HTTPException(400);
 
       // TODO: invalidate row datum
+
+      return c.json(
+        {
+          success: true,
+          error: null,
+          content: null,
+        } satisfies JSONResponseBase,
+        200,
+      );
+    },
+  )
+  .post(
+    "/users/:userId/email-update-request",
+    validator("param", requestEmailVerificationParamsSchema.parse),
+    validator("json", requestEmailUpdateBodySchema.parse),
+    (c) => {
+      const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
+      const { newEmail } = c.req.valid("json");
+
+      // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
+
+      // TODO: check if user exists and include existing email update request datum (1-1 rel)
+
+      // TODO: check if the user's current email is verified
+
+      // TODO: check expiration, on expired invalidate row datum
+
+      // TODO: check if the user's current email is the same as the 'newEmail'
+
+      // TODO: check if the 'newEmail' is already taken
+
+      const codeVerifier = generateRandomToken(40);
+
+      const datum = {
+        userId,
+        expiresAt: new Date(), // TODO: replace this (current time plus 10min)
+        codeChallenge: hash(codeVerifier),
+        email: newEmail,
+      };
+
+      // TODO: insert datum into db (1-1 rel)
+
+      // TODO: send email with code verifier
+
+      return c.json(
+        {
+          success: true,
+          error: null,
+          content: null,
+        } satisfies JSONResponseBase,
+        201,
+      );
+    },
+  )
+  .get(
+    "/users/:userId/email-update-request",
+    validator("param", requestEmailVerificationParamsSchema.parse),
+    validator("query", requestEmailVerificationQuerySchema.parse),
+    (c) => {
+      const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
+      const queryParams = c.req.valid("query");
+
+      // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
+
+      // TODO: check if user exists and include existing email update request datum (1-1 rel)
+
+      // TODO: check expiration, on fail invalidate row datum
+
+      const isValidCode = verifyHash("CHANGE_ME", queryParams.code);
+      if (!isValidCode) throw new HTTPException(400);
+
+      // TODO: update user email with the email update request datum 'new email'
+
+      // TODO: invalidate email update request row
 
       return c.json(
         {
