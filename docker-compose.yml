@@ -1,0 +1,40 @@
+version: "3.8"
+services:
+  libsql:
+    image: ghcr.io/tursodatabase/libsql-server:8145962
+    platform: linux/amd64
+    ports:
+      - "8080:8080"
+      - "5001:5001"
+    environment:
+      SQLD_NODE: primary
+      SQLD_ENABLE_BOTTOMLESS_REPLICATION: true
+      LIBSQL_BOTTOMLESS_BUCKET: libsql-backups
+      LIBSQL_BOTTOMLESS_ENDPOINT: http://minio-storage:9000
+      LIBSQL_BOTTOMLESS_AWS_ACCESS_KEY_ID: j0mvA71yunvYRTU
+      LIBSQL_BOTTOMLESS_AWS_SECRET_ACCESS_KEY: 2Wku9oDp2tUABFT658S0
+      LIBSQL_BOTTOMLESS_AWS_DEFAULT_REGION: us-east-1
+    volumes:
+      - ./data/libsql:/var/lib/sqld
+    depends_on:
+      - minio-storage
+    networks:
+      - libsql-network
+
+  minio-storage:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: j0mvA71yunvYRTU
+      MINIO_ROOT_PASSWORD: 2Wku9oDp2tUABFT658S0
+    command: server /data --console-address ":9001"
+    volumes:
+      - ./data/minio:/data
+    networks:
+      - libsql-network
+
+networks:
+  libsql-network:
+    driver: bridge
