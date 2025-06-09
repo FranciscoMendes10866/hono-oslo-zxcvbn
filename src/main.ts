@@ -17,7 +17,12 @@ import {
   encodeSha256Hex,
   verifyHash,
 } from "./utils/common";
-import { generateCookieDefaults, generateRandomToken } from "./utils/session";
+import {
+  generateCookieDefaults,
+  generateRandomToken,
+  SESSION_EXPIRATION_MS,
+} from "./utils/session";
+import { db } from "./db";
 
 const COOKIE_OPTIONS = Object.freeze(generateCookieDefaults());
 
@@ -31,7 +36,7 @@ const app = new Hono()
       origin: process.env.FRONTEND_DOMAIN_URL || "*",
     }),
   )
-  .post("/users", validator("json", signUpBodySchema.parse), (c) => {
+  .post("/users", validator("json", signUpBodySchema.parse), async (c) => {
     const body = c.req.valid("json");
 
     let password = body.password.trim();
@@ -44,18 +49,47 @@ const app = new Hono()
       throw new HTTPException(400, { message: "Weak password" });
     }
 
-    // TODO: check if account/email is taken
+    const result = await db
+      .selectFrom("users")
+      .select("id")
+      .where("email", "=", body.email)
+      .executeTakeFirst();
+
+    if (typeof result?.id === "string") {
+      throw new HTTPException(409);
+    }
 
     password = hash(password);
 
-    const sessionToken = generateRandomToken();
-    const sessionId = encodeSha256Hex(sessionToken);
+    const datums = await db.transaction().execute(async (trx) => {
+      const user = await trx
+        .insertInto("users")
+        .values({
+          email: body.email,
+          username: body.username,
+          passwordHash: password,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
 
-    // TODO: insert datum into db
+      const sessionToken = generateRandomToken();
+      const expiration = new Date(Date.now() + SESSION_EXPIRATION_MS);
 
-    setCookie(c, "session", sessionToken, {
+      await trx
+        .insertInto("userSessions")
+        .values({
+          id: encodeSha256Hex(sessionToken),
+          userId: user.id!,
+          expiresAt: expiration.getTime(),
+        })
+        .executeTakeFirstOrThrow();
+
+      return { sessionToken, expiration };
+    });
+
+    setCookie(c, "session", datums.sessionToken, {
       ...COOKIE_OPTIONS,
-      expires: new Date(), // TODO: replace this
+      expires: datums.expiration,
     });
 
     return c.json(
@@ -70,24 +104,30 @@ const app = new Hono()
   .post(
     "/users/:userId/email-verification-request",
     validator("param", requestEmailVerificationParamsSchema.parse),
-    (c) => {
+    async (c) => {
       const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
 
       // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
 
-      // TODO: check if user exists and include existing email verification request datum (1-1 rel)
-
-      // TODO: check expiration, on expired invalidate row datum
-
       const codeVerifier = generateRandomToken(40);
 
-      const datum = {
+      const datums = {
         userId,
-        expiresAt: new Date(), // TODO: replace this (current time plus 10min)
+        expiresAt: Date.now() + 10 * 60 * 1_000, // 10min
         codeChallenge: hash(codeVerifier),
       };
 
-      // TODO: insert datum into db (1-1 rel)
+      await db
+        .insertInto("emailVerificationRequests")
+        .values(datums)
+        .onConflict((oc) =>
+          oc.column("userId").doUpdateSet(() => ({
+            createdAt: Date.now(),
+            expiresAt: datums.expiresAt,
+            codeChallenge: datums.codeChallenge,
+          })),
+        )
+        .executeTakeFirstOrThrow();
 
       // TODO: send email with code verifier
 
@@ -105,22 +145,46 @@ const app = new Hono()
     "/users/:userId/email-verification-request",
     validator("param", requestEmailVerificationParamsSchema.parse),
     validator("query", requestEmailVerificationQuerySchema.parse),
-    (c) => {
+    async (c) => {
       const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
       const queryParams = c.req.valid("query");
 
       // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
 
-      // TODO: check if user exists and include existing email verification request datum (1-1 rel)
+      const result = await db
+        .selectFrom("emailVerificationRequests")
+        .where("userId", "==", userId)
+        .select(["expiresAt as expiration", "codeChallenge"])
+        .executeTakeFirst();
 
-      // TODO: check expiration, on fail invalidate row datum
+      if (typeof result === "undefined") {
+        throw new HTTPException(404);
+      }
 
-      const isValidCode = verifyHash("CHANGE_ME", queryParams.code);
+      if (Date.now() >= result.expiration) {
+        await db
+          .deleteFrom("emailVerificationRequests")
+          .where("userId", "=", userId)
+          .executeTakeFirst();
+
+        throw new HTTPException(403);
+      }
+
+      const isValidCode = verifyHash(result.codeChallenge, queryParams.code);
       if (!isValidCode) throw new HTTPException(400);
 
-      // TODO: set the user email as verified
+      await db.transaction().execute(async (tx) => {
+        await tx
+          .updateTable("users")
+          .where("id", "=", userId)
+          .set({ emailVerified: 1 }) // set the user email as verified
+          .executeTakeFirstOrThrow();
 
-      // TODO: invalidate row datum
+        await tx
+          .deleteFrom("emailVerificationRequests")
+          .where("userId", "=", userId)
+          .executeTakeFirst();
+      });
 
       return c.json(
         {
@@ -136,32 +200,34 @@ const app = new Hono()
     "/users/:userId/email-update-request",
     validator("param", requestEmailVerificationParamsSchema.parse),
     validator("json", requestEmailUpdateBodySchema.parse),
-    (c) => {
+    async (c) => {
       const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
       const { newEmail } = c.req.valid("json");
 
+      // TODO: verify the session datum assigned to the http request to check if the account is verified
+
       // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
-
-      // TODO: check if user exists and include existing email update request datum (1-1 rel)
-
-      // TODO: check if the user's current email is verified
-
-      // TODO: check expiration, on expired invalidate row datum
-
-      // TODO: check if the user's current email is the same as the 'newEmail'
-
-      // TODO: check if the 'newEmail' is already taken
 
       const codeVerifier = generateRandomToken(40);
 
-      const datum = {
+      const datums = {
         userId,
-        expiresAt: new Date(), // TODO: replace this (current time plus 10min)
+        expiresAt: Date.now() + 10 * 60 * 1_000, // 10min
         codeChallenge: hash(codeVerifier),
-        email: newEmail,
+        newEmail,
       };
 
-      // TODO: insert datum into db (1-1 rel)
+      await db
+        .insertInto("emailUpdateRequests")
+        .values(datums)
+        .onConflict((oc) =>
+          oc.column("userId").doUpdateSet(() => ({
+            createdAt: Date.now(),
+            expiresAt: datums.expiresAt,
+            codeChallenge: datums.codeChallenge,
+          })),
+        )
+        .executeTakeFirstOrThrow();
 
       // TODO: send email with code verifier
 
@@ -179,22 +245,51 @@ const app = new Hono()
     "/users/:userId/email-update-request",
     validator("param", requestEmailVerificationParamsSchema.parse),
     validator("query", requestEmailVerificationQuerySchema.parse),
-    (c) => {
+    async (c) => {
       const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
       const queryParams = c.req.valid("query");
 
       // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
 
-      // TODO: check if user exists and include existing email update request datum (1-1 rel)
+      const result = await db
+        .selectFrom("emailUpdateRequests")
+        .select(["expiresAt as expiration", "codeChallenge", "newEmail"])
+        .where("userId", "=", "<=")
+        .executeTakeFirst();
 
-      // TODO: check expiration, on fail invalidate row datum
+      if (typeof result === "undefined") {
+        throw new HTTPException(404);
+      }
 
-      const isValidCode = verifyHash("CHANGE_ME", queryParams.code);
+      if (Date.now() >= result.expiration) {
+        await db
+          .deleteFrom("emailUpdateRequests")
+          .where("userId", "=", userId)
+          .executeTakeFirst();
+
+        throw new HTTPException(404);
+      }
+
+      const isValidCode = verifyHash(result.codeChallenge, queryParams.code);
       if (!isValidCode) throw new HTTPException(400);
 
-      // TODO: update user email with the email update request datum 'new email'
+      await db.transaction().execute(async (tx) => {
+        await tx
+          .updateTable("users")
+          .where("id", "=", userId)
+          .set({ email: result.newEmail })
+          .executeTakeFirstOrThrow();
 
-      // TODO: invalidate email update request row
+        await tx
+          .deleteFrom("emailUpdateRequests")
+          .where("userId", "=", userId)
+          .executeTakeFirst();
+
+        await tx
+          .deleteFrom("passwordResetRequests")
+          .where("userId", "=", userId)
+          .executeTakeFirst();
+      });
 
       return c.json(
         {

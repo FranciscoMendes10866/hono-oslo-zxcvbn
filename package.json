@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "migrate:up": "DATABASE_URL=http://localhost:8080 geni up",
+    "migrate:down": "DATABASE_URL=http://localhost:8080 geni down",
+    "db:pull": "DATABASE_URL=http://localhost:8080 kysely-codegen --dialect=libsql --camel-case"
   },
   "keywords": [],
   "author": "",
@@ -11,17 +14,20 @@
   "description": "",
   "devDependencies": {
     "@types/node": "^22.15.29",
+    "kysely-codegen": "^0.18.5",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.3",
+    "@libsql/kysely-libsql": "^0.4.1",
     "@node-rs/argon2": "^2.0.2",
     "@oslojs/crypto": "^1.0.1",
     "@oslojs/encoding": "^1.1.0",
     "@sinclair/typebox": "^0.34.33",
     "@zxcvbn-ts/core": "^3.0.4",
     "hono": "^4.7.11",
+    "kysely": "^0.28.2",
     "tldts": "^7.0.8"
   }
 }

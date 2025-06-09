@@ -1,6 +1,8 @@
 import { encodeBase32LowerCaseNoPadding } from "@oslojs/encoding";
 import { parse as parseURL } from "tldts";
 
+export const SESSION_EXPIRATION_MS = 1000 * 60 * 60 * 24 * 30; // 30 days
+
 export function generateRandomToken(entropyBits: number = 160) {
   const bytes = new Uint8Array(entropyBits / 8);
   crypto.getRandomValues(bytes);
