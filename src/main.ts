@@ -105,7 +105,7 @@ const app = new Hono()
     "/users/:userId/email-verification-request",
     validator("param", requestEmailVerificationParamsSchema.parse),
     async (c) => {
-      const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
 
       // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
 
@@ -146,7 +146,7 @@ const app = new Hono()
     validator("param", requestEmailVerificationParamsSchema.parse),
     validator("query", requestEmailVerificationQuerySchema.parse),
     async (c) => {
-      const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
       const queryParams = c.req.valid("query");
 
       // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
@@ -165,7 +165,7 @@ const app = new Hono()
         await db
           .deleteFrom("emailVerificationRequests")
           .where("userId", "=", userId)
-          .executeTakeFirst();
+          .execute();
 
         throw new HTTPException(403);
       }
@@ -183,7 +183,7 @@ const app = new Hono()
         await tx
           .deleteFrom("emailVerificationRequests")
           .where("userId", "=", userId)
-          .executeTakeFirst();
+          .execute();
       });
 
       return c.json(
@@ -201,7 +201,7 @@ const app = new Hono()
     validator("param", requestEmailVerificationParamsSchema.parse),
     validator("json", requestEmailUpdateBodySchema.parse),
     async (c) => {
-      const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
       const { newEmail } = c.req.valid("json");
 
       // TODO: verify the session datum assigned to the http request to check if the account is verified
@@ -244,9 +244,70 @@ const app = new Hono()
   .get(
     "/users/:userId/email-update-request",
     validator("param", requestEmailVerificationParamsSchema.parse),
+    async (c) => {
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+
+      const result = await db
+        .selectFrom("emailUpdateRequests")
+        .select(["expiresAt as expiration"])
+        .where("userId", "=", userId)
+        .executeTakeFirst();
+
+      if (typeof result === "undefined") {
+        throw new HTTPException(404);
+      }
+
+      if (Date.now() >= result.expiration) {
+        await db
+          .deleteFrom("emailUpdateRequests")
+          .where("userId", "=", userId)
+          .execute();
+
+        throw new HTTPException(404);
+      }
+
+      return c.json(
+        {
+          success: true,
+          error: null,
+          content: result,
+        } satisfies JSONResponseBase,
+        200,
+      );
+    },
+  )
+  .delete(
+    "/users/:userId/email-update-request",
+    validator("param", requestEmailVerificationParamsSchema.parse),
+    async (c) => {
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+
+      await db
+        .deleteFrom("emailUpdateRequests")
+        .where((eb) =>
+          eb.and([
+            eb("userId", "=", userId),
+            eb("expiresAt", "<=", Date.now()),
+          ]),
+        )
+        .executeTakeFirstOrThrow();
+
+      return c.json(
+        {
+          success: true,
+          error: null,
+          content: null,
+        } satisfies JSONResponseBase,
+        200,
+      );
+    },
+  )
+  .get(
+    "/users/:userId/validate-email-update-request",
+    validator("param", requestEmailVerificationParamsSchema.parse),
     validator("query", requestEmailVerificationQuerySchema.parse),
     async (c) => {
-      const { userId } = c.req.valid("param"); // Doubt: maybe it is better to get the userId from the session itself
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
       const queryParams = c.req.valid("query");
 
       // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
@@ -265,7 +326,7 @@ const app = new Hono()
         await db
           .deleteFrom("emailUpdateRequests")
           .where("userId", "=", userId)
-          .executeTakeFirst();
+          .execute();
 
         throw new HTTPException(404);
       }
