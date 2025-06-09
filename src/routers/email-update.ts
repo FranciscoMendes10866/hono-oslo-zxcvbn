@@ -7,7 +7,7 @@ import {
   requestEmailVerificationQuerySchema,
   requestEmailUpdateBodySchema,
 } from "../schemas";
-import { hash, verifyHash } from "../utils/common";
+import { hash, normalizeEmail, verifyHash } from "../utils/common";
 import { generateRandomToken } from "../utils/session";
 import { db } from "../db";
 
@@ -24,13 +24,16 @@ export const emailUpdate = new Hono()
 
       // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
 
+      const newEmailCopy = normalizeEmail(newEmail);
+      if (!newEmailCopy) throw new HTTPException(400);
+
       const codeVerifier = generateRandomToken(40);
 
       const datums = {
         userId,
         expiresAt: Date.now() + 10 * 60 * 1_000, // 10min
         codeChallenge: hash(codeVerifier),
-        newEmail: newEmail.trim(),
+        newEmail: newEmailCopy,
       };
 
       await db

@@ -4,7 +4,12 @@ import { HTTPException } from "hono/http-exception";
 import { setCookie } from "hono/cookie";
 
 import { signUpBodySchema } from "../schemas";
-import { isPasswordGuessable, hash, encodeSha256Hex } from "../utils/common";
+import {
+  isPasswordGuessable,
+  hash,
+  encodeSha256Hex,
+  normalizeEmail,
+} from "../utils/common";
 import {
   COOKIE_OPTIONS,
   generateRandomToken,
@@ -19,9 +24,9 @@ export const usersRouter = new Hono().post(
     const body = c.req.valid("json");
 
     let password = body.password.trim();
-    const email = body.email.trim();
+    const email = normalizeEmail(body.email);
 
-    if (password !== body.confirmPassword.trim()) {
+    if (!email || password !== body.confirmPassword.trim()) {
       throw new HTTPException(400);
     }
 

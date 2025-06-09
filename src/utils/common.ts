@@ -24,3 +24,11 @@ export function encodeSha256Hex(input: string) {
 export function isPasswordGuessable(password: string) {
   return zxcvbn(password).score < 3;
 }
+
+export function normalizeEmail(email: string | null | undefined) {
+  if (typeof email !== "string") return null;
+  const normalized = email.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(normalized)) return null;
+  return normalized;
+}
