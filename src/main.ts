@@ -40,6 +40,7 @@ const app = new Hono()
     const body = c.req.valid("json");
 
     let password = body.password.trim();
+    const email = body.email.trim();
 
     if (password !== body.confirmPassword.trim()) {
       throw new HTTPException(400);
@@ -52,7 +53,7 @@ const app = new Hono()
     const result = await db
       .selectFrom("users")
       .select("id")
-      .where("email", "=", body.email)
+      .where("email", "=", email)
       .executeTakeFirst();
 
     if (typeof result?.id === "string") {
@@ -65,7 +66,7 @@ const app = new Hono()
       const user = await trx
         .insertInto("users")
         .values({
-          email: body.email,
+          email,
           username: body.username,
           passwordHash: password,
         })
@@ -214,7 +215,7 @@ const app = new Hono()
         userId,
         expiresAt: Date.now() + 10 * 60 * 1_000, // 10min
         codeChallenge: hash(codeVerifier),
-        newEmail,
+        newEmail: newEmail.trim(),
       };
 
       await db
@@ -225,6 +226,7 @@ const app = new Hono()
             createdAt: Date.now(),
             expiresAt: datums.expiresAt,
             codeChallenge: datums.codeChallenge,
+            newEmail: datums.newEmail,
           })),
         )
         .executeTakeFirstOrThrow();
