@@ -26,9 +26,9 @@ export function isPasswordGuessable(password: string) {
 }
 
 export function normalizeEmail(email: string | null | undefined) {
-  if (typeof email !== "string") return null;
-  const normalized = email.trim().toLowerCase();
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || typeof email !== "string") return null;
+  const normalized = email.trim().normalize("NFKC").toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
   if (!emailRegex.test(normalized)) return null;
   return normalized;
 }
