@@ -254,7 +254,7 @@ const app = new Hono()
       const result = await db
         .selectFrom("emailUpdateRequests")
         .select(["expiresAt as expiration", "codeChallenge", "newEmail"])
-        .where("userId", "=", "<=")
+        .where("userId", "=", userId)
         .executeTakeFirst();
 
       if (typeof result === "undefined") {
