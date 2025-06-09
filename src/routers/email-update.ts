@@ -1,0 +1,181 @@
+import { Hono } from "hono";
+import { validator } from "hono/validator";
+import { HTTPException } from "hono/http-exception";
+
+import {
+  requestEmailVerificationParamsSchema,
+  requestEmailVerificationQuerySchema,
+  requestEmailUpdateBodySchema,
+} from "../schemas";
+import { hash, verifyHash } from "../utils/common";
+import { generateRandomToken } from "../utils/session";
+import { db } from "../db";
+
+export const emailUpdate = new Hono()
+  .post(
+    "/:userId/email-update-request",
+    validator("param", requestEmailVerificationParamsSchema.parse),
+    validator("json", requestEmailUpdateBodySchema.parse),
+    async (c) => {
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+      const { newEmail } = c.req.valid("json");
+
+      // TODO: verify the session datum assigned to the http request to check if the account is verified
+
+      // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
+
+      const codeVerifier = generateRandomToken(40);
+
+      const datums = {
+        userId,
+        expiresAt: Date.now() + 10 * 60 * 1_000, // 10min
+        codeChallenge: hash(codeVerifier),
+        newEmail: newEmail.trim(),
+      };
+
+      await db
+        .insertInto("emailUpdateRequests")
+        .values(datums)
+        .onConflict((oc) =>
+          oc.column("userId").doUpdateSet(() => ({
+            createdAt: Date.now(),
+            expiresAt: datums.expiresAt,
+            codeChallenge: datums.codeChallenge,
+            newEmail: datums.newEmail,
+          })),
+        )
+        .executeTakeFirstOrThrow();
+
+      // TODO: send email with code verifier
+
+      return c.json(
+        {
+          success: true,
+          error: null,
+          content: null,
+        } satisfies JSONResponseBase,
+        201,
+      );
+    },
+  )
+  .get(
+    "/:userId/email-update-request",
+    validator("param", requestEmailVerificationParamsSchema.parse),
+    async (c) => {
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+
+      const result = await db
+        .selectFrom("emailUpdateRequests")
+        .select(["expiresAt as expiration"])
+        .where("userId", "=", userId)
+        .executeTakeFirst();
+
+      if (typeof result === "undefined") {
+        throw new HTTPException(404);
+      }
+
+      if (Date.now() >= result.expiration) {
+        await db
+          .deleteFrom("emailUpdateRequests")
+          .where("userId", "=", userId)
+          .execute();
+
+        throw new HTTPException(404);
+      }
+
+      return c.json(
+        {
+          success: true,
+          error: null,
+          content: result,
+        } satisfies JSONResponseBase,
+        200,
+      );
+    },
+  )
+  .delete(
+    "/:userId/email-update-request",
+    validator("param", requestEmailVerificationParamsSchema.parse),
+    async (c) => {
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+
+      await db
+        .deleteFrom("emailUpdateRequests")
+        .where((eb) =>
+          eb.and([
+            eb("userId", "=", userId),
+            eb("expiresAt", "<=", Date.now()),
+          ]),
+        )
+        .executeTakeFirstOrThrow();
+
+      return c.json(
+        {
+          success: true,
+          error: null,
+          content: null,
+        } satisfies JSONResponseBase,
+        200,
+      );
+    },
+  )
+  .get(
+    "/:userId/validate-email-update-request",
+    validator("param", requestEmailVerificationParamsSchema.parse),
+    validator("query", requestEmailVerificationQuerySchema.parse),
+    async (c) => {
+      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+      const queryParams = c.req.valid("query");
+
+      // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
+
+      const result = await db
+        .selectFrom("emailUpdateRequests")
+        .select(["expiresAt as expiration", "codeChallenge", "newEmail"])
+        .where("userId", "=", userId)
+        .executeTakeFirst();
+
+      if (typeof result === "undefined") {
+        throw new HTTPException(404);
+      }
+
+      if (Date.now() >= result.expiration) {
+        await db
+          .deleteFrom("emailUpdateRequests")
+          .where("userId", "=", userId)
+          .execute();
+
+        throw new HTTPException(404);
+      }
+
+      const isValidCode = verifyHash(result.codeChallenge, queryParams.code);
+      if (!isValidCode) throw new HTTPException(400);
+
+      await db.transaction().execute(async (tx) => {
+        await tx
+          .updateTable("users")
+          .where("id", "=", userId)
+          .set({ email: result.newEmail })
+          .executeTakeFirstOrThrow();
+
+        await tx
+          .deleteFrom("emailUpdateRequests")
+          .where("userId", "=", userId)
+          .executeTakeFirst();
+
+        await tx
+          .deleteFrom("passwordResetRequests")
+          .where("userId", "=", userId)
+          .executeTakeFirst();
+      });
+
+      return c.json(
+        {
+          success: true,
+          error: null,
+          content: null,
+        } satisfies JSONResponseBase,
+        200,
+      );
+    },
+  );

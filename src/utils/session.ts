@@ -19,3 +19,5 @@ export function generateCookieDefaults() {
     path: "/",
   };
 }
+
+export const COOKIE_OPTIONS = Object.freeze(generateCookieDefaults());
