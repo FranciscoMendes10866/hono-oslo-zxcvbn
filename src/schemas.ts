@@ -54,3 +54,11 @@ export const resetPasswordBodySchema = validatorFactory(
     confirmPassword: T.String({ minLength: 8, maxLength: 64 }),
   }),
 );
+
+export const updatePasswordBodySchema = validatorFactory(
+  T.Object({
+    oldPassword: T.String({ minLength: 8, maxLength: 64 }),
+    newPassword: T.String({ minLength: 8, maxLength: 64 }),
+    confirmNewPassword: T.String({ minLength: 8, maxLength: 64 }),
+  }),
+);
