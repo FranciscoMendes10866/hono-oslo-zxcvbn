@@ -51,7 +51,7 @@ export const emailVerification = new Hono()
       );
     },
   )
-  .get(
+  .patch(
     "/:userId/request",
     validator("param", requestEmailVerificationParamsSchema.parse),
     validator("query", requestEmailVerificationQuerySchema.parse),

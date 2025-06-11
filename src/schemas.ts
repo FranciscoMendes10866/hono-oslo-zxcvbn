@@ -42,11 +42,15 @@ export const requestResetPasswordBodySchema = validatorFactory(
   }),
 );
 
+export const verifyResetPasswordParamsSchema = validatorFactory(
+  T.Object({
+    code: T.String(),
+  }),
+);
+
 export const resetPasswordBodySchema = validatorFactory(
   T.Object({
-    codeVerifier: T.String(),
-    oldPassword: T.Optional(T.String({ minLength: 8, maxLength: 64 })),
-    newPassword: T.String({ minLength: 8, maxLength: 64 }),
-    confirmNewPassword: T.String({ minLength: 8, maxLength: 64 }),
+    password: T.String({ minLength: 8, maxLength: 64 }),
+    confirmPassword: T.String({ minLength: 8, maxLength: 64 }),
   }),
 );

@@ -6,6 +6,7 @@ import { serve } from "@hono/node-server";
 import { usersRouter } from "./routers/users";
 import { emailVerification } from "./routers/email-verification";
 import { emailUpdate } from "./routers/email-update";
+import { passwordReset } from "./routers/password-reset";
 
 const app = new Hono()
   .basePath("/api/auth")
@@ -38,6 +39,7 @@ const app = new Hono()
   })
   .route("/users", usersRouter)
   .route("/email-verification", emailVerification)
-  .route("/email-update", emailUpdate);
+  .route("/email-update", emailUpdate)
+  .route("/password-reset", passwordReset);
 
 serve({ port: 3333, fetch: app.fetch });

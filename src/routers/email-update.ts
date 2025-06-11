@@ -122,7 +122,7 @@ export const emailUpdate = new Hono()
       );
     },
   )
-  .get(
+  .patch(
     "/:userId/validate-email-update-request",
     validator("param", requestEmailVerificationParamsSchema.parse),
     validator("query", requestEmailVerificationQuerySchema.parse),

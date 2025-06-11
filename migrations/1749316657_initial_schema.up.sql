@@ -11,6 +11,7 @@ CREATE TABLE password_reset_requests (
     user_id TEXT PRIMARY KEY,
     code_challenge TEXT NOT NULL,
     code_challenge_method TEXT DEFAULT 'S256',
+    validated_at INTEGER,
     expires_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (CAST(strftime ('%s', 'now') AS INTEGER) * 1000),
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
@@ -38,6 +39,7 @@ CREATE TABLE email_verification_requests (
 CREATE TABLE user_sessions (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL,
+    scope TEXT NOT NULL,
     expires_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (CAST(strftime ('%s', 'now') AS INTEGER) * 1000),
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE

@@ -21,3 +21,24 @@ export function generateCookieDefaults() {
 }
 
 export const COOKIE_OPTIONS = Object.freeze(generateCookieDefaults());
+
+export const STATIC_SESSION_SCOPE = {
+  AUTH: "AUTH",
+  FORGOT_PASSWORD: "FORGOT_PASSWORD",
+} as const;
+
+export type SessionDatum = {
+  id: string | null;
+  expiresAt: Date | null;
+  userId: string | null;
+  isVerified: boolean;
+  scope: keyof typeof STATIC_SESSION_SCOPE | null;
+};
+
+export const EMPTY_SESSION = Object.freeze({
+  id: null,
+  expiresAt: null,
+  userId: null,
+  isVerified: false,
+  scope: null,
+} satisfies SessionDatum);

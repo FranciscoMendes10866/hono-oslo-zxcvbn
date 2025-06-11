@@ -14,6 +14,7 @@ import {
   COOKIE_OPTIONS,
   generateRandomToken,
   SESSION_EXPIRATION_MS,
+  STATIC_SESSION_SCOPE,
 } from "../utils/session";
 import { db } from "../db";
 
@@ -66,6 +67,7 @@ export const usersRouter = new Hono().post(
           id: encodeSha256Hex(sessionToken),
           userId: user.id!,
           expiresAt: expiration.getTime(),
+          scope: STATIC_SESSION_SCOPE.AUTH,
         })
         .executeTakeFirstOrThrow();
 
