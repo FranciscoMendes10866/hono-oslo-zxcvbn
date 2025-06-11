@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { validator } from "hono/validator";
 import { HTTPException } from "hono/http-exception";
-import { setCookie } from "hono/cookie";
+import { deleteCookie, setCookie } from "hono/cookie";
 
 import {
   signInBodySchema,
@@ -206,4 +206,38 @@ export const usersRouter = new Hono()
         200,
       );
     },
-  );
+  )
+  .get("/@me", async (c) => {
+    const userId = "CHANGE_ME"; // TODO: get the userId from the session itself
+
+    const result = await db
+      .selectFrom("users")
+      .select(["id", "emailVerified", "username", "email"])
+      .where("id", "=", userId)
+      .executeTakeFirst();
+    if (!result?.id) throw new HTTPException(404);
+
+    return c.json(
+      {
+        success: true,
+        error: null,
+        content: result,
+      } satisfies JSONResponseBase,
+      200,
+    );
+  })
+  .delete("/sign-out", async (c) => {
+    const userId = "CHANGE_ME"; // TODO: get the userId from the session itself
+
+    deleteCookie(c, "session");
+    await db.deleteFrom("userSessions").where("id", "=", userId).execute();
+
+    return c.json(
+      {
+        success: true,
+        error: null,
+        content: null,
+      } satisfies JSONResponseBase,
+      200,
+    );
+  });
