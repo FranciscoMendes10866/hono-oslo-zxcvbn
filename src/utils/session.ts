@@ -2,7 +2,7 @@ import { encodeBase32LowerCaseNoPadding } from "@oslojs/encoding";
 import { parse as parseURL } from "tldts";
 import { jsonObjectFrom } from "kysely/helpers/sqlite";
 import { createMiddleware } from "hono/factory";
-import { getCookie, setCookie } from "hono/cookie";
+import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 
 import { encodeSha256Hex } from "./common";
@@ -153,6 +153,10 @@ export const sessionMiddleware = createMiddleware<HonoGlobalContext>(
     const sessionToken = getCookie(c, "session") || null;
 
     const { type, payload } = await resolveSession(sessionToken);
+
+    if (sessionToken && type === "NO_SESSION") {
+      deleteCookie(c, "session");
+    }
 
     if (sessionToken && type === "SESSION_EXTENDED") {
       setCookie(c, "session", sessionToken, {
