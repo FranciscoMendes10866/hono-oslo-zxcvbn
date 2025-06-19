@@ -56,14 +56,6 @@ export const EMPTY_SESSION = Object.freeze({
   scope: null,
 });
 
-function isExpired(expiresAt: number): boolean {
-  return Date.now() >= new Date(expiresAt).getTime();
-}
-
-function needsRenewal(expiresAt: number): boolean {
-  return Date.now() >= new Date(expiresAt).getTime() - RENEW_THRESHOLD_MS;
-}
-
 export async function resolveSession(token: string | null): Promise<
   | {
       type: "NO_SESSION";
@@ -102,8 +94,10 @@ export async function resolveSession(token: string | null): Promise<
   if (!session) return { type: "NO_SESSION", payload: EMPTY_SESSION };
 
   const clonedSession = structuredClone(session);
+  const now = Date.now();
 
-  if (isExpired(clonedSession.expiresAt)) {
+  const isExpired = now >= clonedSession.expiresAt;
+  if (isExpired) {
     try {
       await db
         .deleteFrom("userSessions")
@@ -116,8 +110,9 @@ export async function resolveSession(token: string | null): Promise<
     }
   }
 
-  if (needsRenewal(clonedSession.expiresAt)) {
-    const expiration = Date.now() + SESSION_EXPIRATION_MS;
+  const needsRenewal = now >= clonedSession.expiresAt - RENEW_THRESHOLD_MS;
+  if (needsRenewal) {
+    const expiration = now + SESSION_EXPIRATION_MS;
     const updatedSession = await db
       .updateTable("userSessions")
       .set({ expiresAt: expiration })
