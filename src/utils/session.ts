@@ -17,18 +17,18 @@ export function generateRandomToken(entropyBits: number = 160) {
   return encodeBase32LowerCaseNoPadding(bytes);
 }
 
-export function generateCookieDefaults() {
-  const url = new URL(process.env.FRONTEND_DOMAIN_URL || "");
-  return {
-    domain: parseURL(url.toString()).domain || undefined,
-    secure: url.protocol.startsWith("https"),
-    sameSite: "lax" as const,
-    httpOnly: true,
-    path: "/",
-  };
-}
-
-export const COOKIE_OPTIONS = Object.freeze(generateCookieDefaults());
+export const COOKIE_OPTIONS = Object.freeze(
+  (() => {
+    const url = new URL(process.env.FRONTEND_DOMAIN_URL || "");
+    return {
+      domain: parseURL(url.toString()).domain || undefined,
+      secure: url.protocol.startsWith("https"),
+      sameSite: "lax" as const,
+      httpOnly: true,
+      path: "/",
+    };
+  })(),
+);
 
 export const STATIC_SESSION_SCOPE = {
   AUTH: "AUTH",
