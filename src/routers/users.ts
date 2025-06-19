@@ -17,7 +17,9 @@ import {
 } from "../utils/common";
 import {
   COOKIE_OPTIONS,
+  enforceEmailVerification,
   generateRandomToken,
+  guardWithUserAuth,
   SESSION_EXPIRATION_MS,
   STATIC_SESSION_SCOPE,
 } from "../utils/session";
@@ -136,11 +138,13 @@ export const usersRouter = new Hono()
   })
   .patch(
     "/update-password",
+    guardWithUserAuth,
+    enforceEmailVerification,
     validator("json", updatePasswordBodySchema.parse),
     async (c) => {
       const body = c.req.valid("json");
 
-      const userId = "CHANGE_ME"; // TODO: get the userId from the session itself
+      const userId = c.get("userSession").userId!;
 
       // TODO: verify the session datum assigned to the http request to check if the account is verified
 
@@ -207,8 +211,8 @@ export const usersRouter = new Hono()
       );
     },
   )
-  .get("/@me", async (c) => {
-    const userId = "CHANGE_ME"; // TODO: get the userId from the session itself
+  .get("/@me", guardWithUserAuth, async (c) => {
+    const userId = c.get("userSession").userId!;
 
     const result = await db
       .selectFrom("users")
@@ -226,8 +230,8 @@ export const usersRouter = new Hono()
       200,
     );
   })
-  .delete("/sign-out", async (c) => {
-    const userId = "CHANGE_ME"; // TODO: get the userId from the session itself
+  .delete("/sign-out", guardWithUserAuth, async (c) => {
+    const userId = c.get("userSession").userId!;
 
     deleteCookie(c, "session");
     await db.deleteFrom("userSessions").where("id", "=", userId).execute();

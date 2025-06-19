@@ -3,24 +3,27 @@ import { validator } from "hono/validator";
 import { HTTPException } from "hono/http-exception";
 
 import {
-  requestEmailVerificationParamsSchema,
   requestEmailVerificationQuerySchema,
   requestEmailUpdateBodySchema,
 } from "../schemas";
 import { hash, normalizeEmail, verifyHash } from "../utils/common";
-import { generateRandomToken } from "../utils/session";
+import {
+  enforceEmailVerification,
+  generateRandomToken,
+  guardWithUserAuth,
+} from "../utils/session";
 import { db } from "../db";
 
 export const emailUpdate = new Hono()
   .post(
     "/:userId/email-update-request",
-    validator("param", requestEmailVerificationParamsSchema.parse),
+    guardWithUserAuth,
+    enforceEmailVerification,
     validator("json", requestEmailUpdateBodySchema.parse),
     async (c) => {
-      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
-      const { newEmail } = c.req.valid("json");
+      const userId = c.get("userSession").userId!;
 
-      // TODO: verify the session datum assigned to the http request to check if the account is verified
+      const { newEmail } = c.req.valid("json");
 
       // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
 
@@ -61,73 +64,63 @@ export const emailUpdate = new Hono()
       );
     },
   )
-  .get(
-    "/:userId/email-update-request",
-    validator("param", requestEmailVerificationParamsSchema.parse),
-    async (c) => {
-      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+  .get("/:userId/email-update-request", guardWithUserAuth, async (c) => {
+    const userId = c.get("userSession").userId!;
 
-      const result = await db
-        .selectFrom("emailUpdateRequests")
-        .select(["expiresAt as expiration"])
-        .where("userId", "=", userId)
-        .executeTakeFirst();
+    const result = await db
+      .selectFrom("emailUpdateRequests")
+      .select(["expiresAt as expiration"])
+      .where("userId", "=", userId)
+      .executeTakeFirst();
 
-      if (typeof result === "undefined") {
-        throw new HTTPException(404);
-      }
+    if (typeof result === "undefined") {
+      throw new HTTPException(404);
+    }
 
-      if (Date.now() >= result.expiration) {
-        await db
-          .deleteFrom("emailUpdateRequests")
-          .where("userId", "=", userId)
-          .execute();
-
-        throw new HTTPException(404);
-      }
-
-      return c.json(
-        {
-          success: true,
-          error: null,
-          content: result,
-        } satisfies JSONResponseBase,
-        200,
-      );
-    },
-  )
-  .delete(
-    "/:userId/email-update-request",
-    validator("param", requestEmailVerificationParamsSchema.parse),
-    async (c) => {
-      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
-
+    if (Date.now() >= result.expiration) {
       await db
         .deleteFrom("emailUpdateRequests")
-        .where((eb) =>
-          eb.and([
-            eb("userId", "=", userId),
-            eb("expiresAt", "<=", Date.now()),
-          ]),
-        )
-        .executeTakeFirstOrThrow();
+        .where("userId", "=", userId)
+        .execute();
 
-      return c.json(
-        {
-          success: true,
-          error: null,
-          content: null,
-        } satisfies JSONResponseBase,
-        200,
-      );
-    },
-  )
+      throw new HTTPException(404);
+    }
+
+    return c.json(
+      {
+        success: true,
+        error: null,
+        content: result,
+      } satisfies JSONResponseBase,
+      200,
+    );
+  })
+  .delete("/:userId/email-update-request", guardWithUserAuth, async (c) => {
+    const userId = c.get("userSession").userId!;
+
+    await db
+      .deleteFrom("emailUpdateRequests")
+      .where((eb) =>
+        eb.and([eb("userId", "=", userId), eb("expiresAt", "<=", Date.now())]),
+      )
+      .executeTakeFirstOrThrow();
+
+    return c.json(
+      {
+        success: true,
+        error: null,
+        content: null,
+      } satisfies JSONResponseBase,
+      200,
+    );
+  })
   .patch(
     "/:userId/validate-email-update-request",
-    validator("param", requestEmailVerificationParamsSchema.parse),
+    guardWithUserAuth,
     validator("query", requestEmailVerificationQuerySchema.parse),
     async (c) => {
-      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+      const userId = c.get("userSession").userId!;
+
       const queryParams = c.req.valid("query");
 
       // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)

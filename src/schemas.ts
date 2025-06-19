@@ -11,12 +11,6 @@ export const signUpBodySchema = validatorFactory(
   }),
 );
 
-export const requestEmailVerificationParamsSchema = validatorFactory(
-  T.Object({
-    userId: T.String({ format: "uuid" }),
-  }),
-);
-
 export const requestEmailVerificationQuerySchema = validatorFactory(
   T.Object({
     code: T.String(),

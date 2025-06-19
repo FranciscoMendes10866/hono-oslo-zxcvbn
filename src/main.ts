@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { serve } from "@hono/node-server";
 
+import { sessionMiddleware } from "./utils/session";
 import { usersRouter } from "./routers/users";
 import { emailVerification } from "./routers/email-verification";
 import { emailUpdate } from "./routers/email-update";
@@ -16,6 +17,7 @@ const app = new Hono()
       origin: process.env.FRONTEND_DOMAIN_URL || "*",
     }),
   )
+  .use(sessionMiddleware)
   .onError((exception, c) => {
     console.error(exception);
     if (exception instanceof HTTPException) {

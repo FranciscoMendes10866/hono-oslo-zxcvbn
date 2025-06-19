@@ -2,61 +2,59 @@ import { Hono } from "hono";
 import { validator } from "hono/validator";
 import { HTTPException } from "hono/http-exception";
 
-import {
-  requestEmailVerificationParamsSchema,
-  requestEmailVerificationQuerySchema,
-} from "../schemas";
+import { requestEmailVerificationQuerySchema } from "../schemas";
 import { hash, verifyHash } from "../utils/common";
-import { generateRandomToken } from "../utils/session";
+import {
+  EMAIL_VERIFICATION_FLAGS,
+  generateRandomToken,
+  guardWithUserAuth,
+} from "../utils/session";
 import { db } from "../db";
 
 export const emailVerification = new Hono()
-  .post(
-    "/:userId/request",
-    validator("param", requestEmailVerificationParamsSchema.parse),
-    async (c) => {
-      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+  .post("/:userId/request", guardWithUserAuth, async (c) => {
+    const userId = c.get("userSession").userId!;
 
-      // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
+    // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
 
-      const codeVerifier = generateRandomToken(40);
+    const codeVerifier = generateRandomToken(40);
 
-      const datums = {
-        userId,
-        expiresAt: Date.now() + 10 * 60 * 1_000, // 10min
-        codeChallenge: hash(codeVerifier),
-      };
+    const datums = {
+      userId,
+      expiresAt: Date.now() + 10 * 60 * 1_000, // 10min
+      codeChallenge: hash(codeVerifier),
+    };
 
-      await db
-        .insertInto("emailVerificationRequests")
-        .values(datums)
-        .onConflict((oc) =>
-          oc.column("userId").doUpdateSet(() => ({
-            createdAt: Date.now(),
-            expiresAt: datums.expiresAt,
-            codeChallenge: datums.codeChallenge,
-          })),
-        )
-        .executeTakeFirstOrThrow();
+    await db
+      .insertInto("emailVerificationRequests")
+      .values(datums)
+      .onConflict((oc) =>
+        oc.column("userId").doUpdateSet(() => ({
+          createdAt: Date.now(),
+          expiresAt: datums.expiresAt,
+          codeChallenge: datums.codeChallenge,
+        })),
+      )
+      .executeTakeFirstOrThrow();
 
-      // TODO: send email with code verifier
+    // TODO: send email with code verifier
 
-      return c.json(
-        {
-          success: true,
-          error: null,
-          content: null,
-        } satisfies JSONResponseBase,
-        201,
-      );
-    },
-  )
+    return c.json(
+      {
+        success: true,
+        error: null,
+        content: null,
+      } satisfies JSONResponseBase,
+      201,
+    );
+  })
   .patch(
     "/:userId/request",
-    validator("param", requestEmailVerificationParamsSchema.parse),
+    guardWithUserAuth,
     validator("query", requestEmailVerificationQuerySchema.parse),
     async (c) => {
-      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+      const userId = c.get("userSession").userId!;
+
       const queryParams = c.req.valid("query");
 
       // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
@@ -87,7 +85,7 @@ export const emailVerification = new Hono()
         await tx
           .updateTable("users")
           .where("id", "=", userId)
-          .set({ emailVerified: 1 }) // set the user email as verified
+          .set({ emailVerified: EMAIL_VERIFICATION_FLAGS.VERIFIED })
           .executeTakeFirstOrThrow();
 
         await tx

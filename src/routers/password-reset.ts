@@ -4,7 +4,6 @@ import { HTTPException } from "hono/http-exception";
 import { setCookie } from "hono/cookie";
 
 import {
-  requestEmailVerificationParamsSchema,
   requestResetPasswordBodySchema,
   resetPasswordBodySchema,
   verifyResetPasswordParamsSchema,
@@ -19,6 +18,7 @@ import {
 import {
   COOKIE_OPTIONS,
   generateRandomToken,
+  guardWithUserAuth,
   SESSION_EXPIRATION_MS,
   STATIC_SESSION_SCOPE,
 } from "../utils/session";
@@ -27,9 +27,9 @@ import { db } from "../db";
 export const passwordReset = new Hono()
   .post(
     "/:userId/request",
-    validator("param", requestResetPasswordBodySchema.parse),
+    validator("json", requestResetPasswordBodySchema.parse),
     async (c) => {
-      const { email } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+      const { email } = c.req.valid("json");
 
       // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
 
@@ -111,10 +111,11 @@ export const passwordReset = new Hono()
   )
   .patch(
     "/:userId/verify",
-    validator("param", requestEmailVerificationParamsSchema.parse),
+    guardWithUserAuth,
     validator("query", verifyResetPasswordParamsSchema.parse),
     async (c) => {
-      const { userId } = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+      const userId = c.get("userSession").userId!;
+
       const queryParams = c.req.valid("query");
 
       // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
@@ -155,22 +156,23 @@ export const passwordReset = new Hono()
   )
   .post(
     "/:userId/reset",
-    validator("param", requestEmailVerificationParamsSchema.parse),
+    guardWithUserAuth,
     validator("json", resetPasswordBodySchema.parse),
     async (c) => {
-      const queryParams = c.req.valid("param"); // TODO: maybe it is better to get the userId from the session itself
+      const userId = c.get("userSession").userId!;
+
       const body = c.req.valid("json");
 
       const result = await db
         .selectFrom("passwordResetRequests")
         .select(["codeChallenge", "expiresAt as expiration", "validatedAt"])
-        .where("userId", "=", queryParams.userId)
+        .where("userId", "=", userId)
         .executeTakeFirstOrThrow();
 
       if (Date.now() >= result.expiration) {
         await db
           .deleteFrom("passwordResetRequests")
-          .where("userId", "=", queryParams.userId)
+          .where("userId", "=", userId)
           .execute();
 
         throw new HTTPException(403);
@@ -195,23 +197,23 @@ export const passwordReset = new Hono()
       const datums = await db.transaction().execute(async (trx) => {
         await trx
           .updateTable("users")
-          .where("id", "=", queryParams.userId)
+          .where("id", "=", userId)
           .set({ passwordHash: password })
           .executeTakeFirstOrThrow();
 
         await trx
           .deleteFrom("emailUpdateRequests")
-          .where("userId", "=", queryParams.userId)
+          .where("userId", "=", userId)
           .executeTakeFirst();
 
         await trx
           .deleteFrom("passwordResetRequests")
-          .where("userId", "=", queryParams.userId)
+          .where("userId", "=", userId)
           .executeTakeFirst();
 
         await trx
           .deleteFrom("userSessions")
-          .where("userId", "=", queryParams.userId)
+          .where("userId", "=", userId)
           .executeTakeFirst();
 
         const sessionToken = generateRandomToken();
@@ -221,7 +223,7 @@ export const passwordReset = new Hono()
           .insertInto("userSessions")
           .values({
             id: encodeSha256Hex(sessionToken),
-            userId: queryParams.userId,
+            userId: userId,
             expiresAt: expiration,
             scope: STATIC_SESSION_SCOPE.AUTH,
           })
