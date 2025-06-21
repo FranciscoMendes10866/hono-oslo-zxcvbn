@@ -10,9 +10,10 @@ import {
   guardWithUserAuth,
 } from "../utils/session";
 import { db } from "../db";
+import { emailRenderer } from "../utils/email";
 
 export const emailVerification = new Hono()
-  .post("/:userId/request", guardWithUserAuth, async (c) => {
+  .post("/request", guardWithUserAuth, async (c) => {
     const userId = c.get("userSession").userId!;
 
     const codeVerifier = generateRandomToken(40);
@@ -35,7 +36,11 @@ export const emailVerification = new Hono()
       )
       .executeTakeFirstOrThrow();
 
-    // TODO: send email with code verifier
+    const emailBody = emailRenderer("EMAIL_VERIFICATION_REQUEST", {
+      codeVerifier,
+    });
+
+    console.log(emailBody);
 
     return c.json(
       {
@@ -47,7 +52,7 @@ export const emailVerification = new Hono()
     );
   })
   .patch(
-    "/:userId/request",
+    "/request",
     guardWithUserAuth,
     validator("query", requestEmailVerificationQuerySchema.parse),
     async (c) => {

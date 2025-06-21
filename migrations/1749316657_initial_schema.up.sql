@@ -9,12 +9,14 @@ CREATE TABLE users (
 
 CREATE TABLE password_reset_requests (
     user_id TEXT PRIMARY KEY,
+    session_id TEXT,
     code_challenge TEXT NOT NULL,
     code_challenge_method TEXT DEFAULT 'S256',
     validated_at INTEGER,
     expires_at INTEGER NOT NULL,
     created_at INTEGER NOT NULL DEFAULT (CAST(strftime ('%s', 'now') AS INTEGER) * 1000),
-    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES user_sessions (id) ON DELETE CASCADE
 );
 
 CREATE TABLE email_update_requests (
@@ -46,5 +48,5 @@ CREATE TABLE user_sessions (
 );
 
 CREATE INDEX idx_users_email ON users (email);
-
 CREATE INDEX idx_user_sessions_user_id ON user_sessions (user_id);
+CREATE INDEX idx_password_reset_requests_session_id ON password_reset_requests (session_id);

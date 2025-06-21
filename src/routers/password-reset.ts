@@ -23,10 +23,11 @@ import {
   STATIC_SESSION_SCOPE,
 } from "../utils/session";
 import { db } from "../db";
+import { emailRenderer } from "../utils/email";
 
 export const passwordReset = new Hono()
   .post(
-    "/:userId/request",
+    "/request",
     validator("json", requestResetPasswordBodySchema.parse),
     async (c) => {
       const { email } = c.req.valid("json");
@@ -73,16 +74,15 @@ export const passwordReset = new Hono()
           })
           .executeTakeFirstOrThrow();
 
-        // TODO: maybe assign a sessionId to the password_reset_requests table with cascade
-        // → when password_reset_request gets deleted the corresponding session gets deleted as well
         await trx
           .insertInto("passwordResetRequests")
-          .values(datums)
+          .values({ ...datums, sessionId })
           .onConflict((oc) =>
             oc.column("userId").doUpdateSet(() => ({
               createdAt: Date.now(),
               expiresAt: datums.expiresAt,
               codeChallenge: datums.codeChallenge,
+              sessionId,
             })),
           )
           .executeTakeFirstOrThrow();
@@ -95,7 +95,11 @@ export const passwordReset = new Hono()
         expires: transactionResult.expiration,
       });
 
-      // TODO: send email with code verifier
+      const emailBody = emailRenderer("EMAIL_VERIFICATION_REQUEST", {
+        codeVerifier,
+      });
+
+      console.log(emailBody);
 
       return c.json(
         {
@@ -108,7 +112,7 @@ export const passwordReset = new Hono()
     },
   )
   .patch(
-    "/:userId/verify",
+    "/verify",
     guardWithUserAuth,
     validator("query", verifyResetPasswordParamsSchema.parse),
     async (c) => {
@@ -151,7 +155,7 @@ export const passwordReset = new Hono()
     },
   )
   .post(
-    "/:userId/reset",
+    "/reset",
     guardWithUserAuth,
     validator("json", resetPasswordBodySchema.parse),
     async (c) => {

@@ -13,10 +13,11 @@ import {
   guardWithUserAuth,
 } from "../utils/session";
 import { db } from "../db";
+import { emailRenderer } from "../utils/email";
 
 export const emailUpdate = new Hono()
   .post(
-    "/:userId/email-update-request",
+    "/email-update-request",
     guardWithUserAuth,
     enforceEmailVerification,
     validator("json", requestEmailUpdateBodySchema.parse),
@@ -50,7 +51,11 @@ export const emailUpdate = new Hono()
         )
         .executeTakeFirstOrThrow();
 
-      // TODO: send email with code verifier
+      const emailBody = emailRenderer("EMAIL_UPDATE_REQUEST", {
+        codeVerifier,
+      });
+
+      console.log(emailBody);
 
       return c.json(
         {
@@ -62,7 +67,7 @@ export const emailUpdate = new Hono()
       );
     },
   )
-  .get("/:userId/email-update-request", guardWithUserAuth, async (c) => {
+  .get("/email-update-request", guardWithUserAuth, async (c) => {
     const userId = c.get("userSession").userId!;
 
     const result = await db
@@ -93,7 +98,7 @@ export const emailUpdate = new Hono()
       200,
     );
   })
-  .delete("/:userId/email-update-request", guardWithUserAuth, async (c) => {
+  .delete("/email-update-request", guardWithUserAuth, async (c) => {
     const userId = c.get("userSession").userId!;
 
     await db
@@ -113,7 +118,7 @@ export const emailUpdate = new Hono()
     );
   })
   .patch(
-    "/:userId/validate-email-update-request",
+    "/validate-email-update-request",
     guardWithUserAuth,
     validator("query", requestEmailVerificationQuerySchema.parse),
     async (c) => {

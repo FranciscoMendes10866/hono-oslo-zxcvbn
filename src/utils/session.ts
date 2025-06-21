@@ -80,6 +80,7 @@ export async function resolveSession(token: string | null): Promise<
       "id",
       "expiresAt",
       "userId",
+      "scope",
       jsonObjectFrom(
         eb
           .selectFrom("users")
@@ -134,7 +135,9 @@ export async function resolveSession(token: string | null): Promise<
       isVerified:
         clonedSession.user.emailVerified === EMAIL_VERIFICATION_FLAGS.VERIFIED,
       userId: clonedSession.userId,
-      scope: STATIC_SESSION_SCOPE.AUTH, // TODO
+      scope:
+        (clonedSession.scope as SessionDatum["scope"]) ||
+        STATIC_SESSION_SCOPE.AUTH,
     },
   };
 }
