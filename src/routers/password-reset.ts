@@ -31,8 +31,6 @@ export const passwordReset = new Hono()
     async (c) => {
       const { email } = c.req.valid("json");
 
-      // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
-
       const normalizedEmail = normalizeEmail(email);
       if (!normalizedEmail) throw new HTTPException(400);
 
@@ -117,8 +115,6 @@ export const passwordReset = new Hono()
       const userId = c.get("userSession").userId!;
 
       const queryParams = c.req.valid("query");
-
-      // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
 
       const result = await db
         .selectFrom("passwordResetRequests")

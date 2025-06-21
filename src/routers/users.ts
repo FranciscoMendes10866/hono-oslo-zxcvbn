@@ -146,8 +146,6 @@ export const usersRouter = new Hono()
 
       const userId = c.get("userSession").userId!;
 
-      // TODO: verify the session datum assigned to the http request to check if the account is verified
-
       const result = await db
         .selectFrom("users")
         .select("passwordHash")

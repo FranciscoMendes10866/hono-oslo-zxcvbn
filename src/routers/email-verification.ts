@@ -15,8 +15,6 @@ export const emailVerification = new Hono()
   .post("/:userId/request", guardWithUserAuth, async (c) => {
     const userId = c.get("userSession").userId!;
 
-    // TODO: rate limit to max 1 request in a 10min window (by userId and not IP)
-
     const codeVerifier = generateRandomToken(40);
 
     const datums = {
@@ -56,8 +54,6 @@ export const emailVerification = new Hono()
       const userId = c.get("userSession").userId!;
 
       const queryParams = c.req.valid("query");
-
-      // TODO: rate limit to max 5 requests in a 5min window (by userId and not IP)
 
       const result = await db
         .selectFrom("emailVerificationRequests")
