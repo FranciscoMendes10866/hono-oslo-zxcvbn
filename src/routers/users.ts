@@ -229,10 +229,10 @@ export const usersRouter = new Hono()
     );
   })
   .delete("/sign-out", guardWithUserAuth, async (c) => {
-    const userId = c.get("userSession").userId!;
+    const sessionId = c.get("userSession").id!;
 
     deleteCookie(c, "session");
-    await db.deleteFrom("userSessions").where("id", "=", userId).execute();
+    await db.deleteFrom("userSessions").where("id", "=", sessionId).execute();
 
     return c.json(
       {
